@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English-Chinese Vocab Matcher</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --success: #2ecc71;
+            --error: #e74c3c;
+            --bg: #f5f7fa;
+            --card-bg: #ffffff;
+            --text: #2c3e50;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            color: var(--primary);
+        }
+
+        p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .game-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: transform 0.2s, background-color 0.2s;
+            user-select: none;
+            border: 2px solid transparent;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        .card.selected {
+            border-color: var(--primary);
+            background-color: #e3f2fd;
+        }
+
+        .card.matched {
+            background-color: var(--success);
+            color: white;
+            cursor: default;
+            transform: none;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .card.mismatch {
+            background-color: var(--error);
+            color: white;
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+
+        .controls {
+            margin-top: 30px;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background-color: #357abd;
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .game-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .card {
+                height: 80px;
+                font-size: 0.85rem;
+            }
+        }
+        @media (max-width: 400px) {
+            .game-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Vocab Matcher</h1>
+        <p>Match the English word with its Chinese definition.</p>
+    </header>
+
+    <div class="stats-bar">
+        <div id="score">Matches: 0/8</div>
+        <div id="moves">Moves: 0</div>
+    </div>
+
+    <div class="game-grid" id="grid">
+        </div>
+
+    <div class="controls">
+        <button onclick="initGame()">New Round (Random Words)</button>
+    </div>
+
+    <script>
+        // Data parsed from Sources 1 and 2
+        const vocabData = [
+            // Group 1: Celebrity
+            { en: "Celebrity", cn: "名人" },
+            { en: "Stardom", cn: "明星地位" },
+            { en: "High-profile", cn: "高調的、備受矚目的" },
+            { en: "A-listers", cn: "一線明星" },
+            { en: "Reputation", cn: "名聲" },
+            { en: "Reputational", cn: "關乎名聲的" },
+            { en: "Social standing", cn: "社會地位" },
+            { en: "Elevate social status", cn: "提升社會地位" },
+            // Group 2: Relationships
+            { en: "Marriage", cn: "婚姻" },
+            { en: "Marital", cn: "婚姻的" },
+            { en: "Marital status", cn: "婚姻狀況" },
+            { en: "Divorce", cn: "離婚" },
+            { en: "File for divorce", cn: "申請離婚" },
+            { en: "Split up", cn: "分手" },
+            { en: "Call it quits", cn: "結束關係" },
+            { en: "Romantic relationship", cn: "戀愛關係" },
+            { en: "Romance", cn: "浪漫關係、戀情" },
+            { en: "Intimacy", cn: "親密關係" },
+            // Group 3: Gossip
+            { en: "Gossip", cn: "八卦" },
+            { en: "Scandal", cn: "醜聞" },
+            { en: "Scandalous", cn: "醜聞性的" },
+            { en: "Speculate", cn: "推測" },
+            { en: "Speculation", cn: "推測 (n.)" },
+            { en: "Talk badly about someone", cn: "說某人壞話" },
+            { en: "Misfortune", cn: "不幸" },
+            { en: "Shameful", cn: "可恥的" },
+            // Group 4: Psychology
+            { en: "Clinical psychologist", cn: "臨床心理學家" },
+            { en: "Psyche", cn: "心靈、心理" },
+            { en: "Vulnerable", cn: "脆弱的" },
+            { en: "Invulnerable", cn: "無懈可擊的" },
+            { en: "Humanize", cn: "使人性化" },
+            { en: "Stress relief", cn: "壓力舒緩" },
+            { en: "Serve a form of stress relief", cn: "作為一種壓力舒緩方式" },
+            { en: "Overwhelming", cn: "壓倒性的" },
+            { en: "Numb out of feelings", cn: "麻痺情感" },
+            { en: "Dissatisfaction", cn: "不滿" },
+            { en: "Dissatisfied", cn: "不滿的" },
+            { en: "Dissatisfactory", cn: "不令人滿意的" },
+            // Group 5: Social
+            { en: "Cultural norms", cn: "文化規範" },
+            { en: "Social animals", cn: "群居動物" },
+            { en: "Social encounter", cn: "社交接觸" },
+            { en: "Sense of community", cn: "社群感" },
+            { en: "Parasocial", cn: "擬社會的" },
+            { en: "Feel connected to", cn: "感到與……相連" },
+            { en: "Social circle", cn: "社交圈" },
+            { en: "Negative influence", cn: "負面影響" },
+            // Group 6: Motives
+            { en: "Intention", cn: "意圖" },
+            { en: "Motive", cn: "動機 (n.)" },
+            { en: "Motivation", cn: "動機 (Motivation)" },
+            { en: "Altruistic", cn: "利他的" },
+            { en: "Serve purpose", cn: "達到某種目的" },
+            { en: "Fulfill", cn: "實現、滿足" },
+            { en: "Have implications", cn: "具有影響" },
+            { en: "Build self-esteem", cn: "建立自尊" },
+            // Group 7: Others
+            { en: "Logically speaking", cn: "從邏輯上說" },
+            { en: "Have no bearing on", cn: "與……無關" },
+            { en: "Unravel", cn: "解開、崩潰" },
+            { en: "Reluctant", cn: "不情願的" },
+            { en: "Reluctance", cn: "不情願 (n.)" },
+            { en: "Admit", cn: "承認" },
+            { en: "Assume", cn: "假設 (v.)" },
+            { en: "Assumption", cn: "假設 (n.)" },
+            { en: "Confuse", cn: "使困惑" },
+            { en: "Confused", cn: "困惑的" },
+            { en: "Align with", cn: "與……一致" },
+            { en: "Authentic", cn: "真實的" },
+            { en: "Consist of", cn: "由……組成" },
+            { en: "Malicious", cn: "惡意的" },
+            { en: "Reinforce", cn: "強化" },
+            { en: "Compel", cn: "強迫" },
+            { en: "Compelling", cn: "引人入勝的" },
+            { en: "Merely", cn: "僅僅 (adv.)" },
+            { en: "Solely", cn: "僅僅 (Solely)" },
+            { en: "Elevate", cn: "提升" },
+            { en: "Imagine", cn: "想像" },
+            { en: "Risk-free", cn: "無風險的" },
+            { en: "Reject", cn: "拒絕" },
+            { en: "Low-stakes", cn: "低風險的" },
+            { en: "High-stakes", cn: "高風險的" },
+            { en: "High-stakes examination", cn: "高風險考試" },
+            { en: "Pose a risk to", cn: "對……構成風險" },
+            { en: "Scroll through", cn: "滾動瀏覽" },
+            { en: "Snack on", cn: "吃零食" },
+            { en: "Personalities", cn: "名人（複數）" },
+            { en: "Inner lives", cn: "內心世界" },
+            { en: "Unlikely", cn: "不太可能的" },
+            { en: "Tend to be", cn: "傾向於" },
+            { en: "Wealthy", cn: "富有的" },
+            { en: "Get cheated on", cn: "被出軌" },
+            { en: "Validate", cn: "證實、認可" },
+            { en: "Martial arts", cn: "武術" },
+            { en: "Transmission", cn: "傳播 (n.)" },
+            { en: "Transmit", cn: "傳播 (v.)" },
+            { en: "Function", cn: "功能" },
+            { en: "Class", cn: "階級/分類" },
+            { en: "Classify", cn: "分類 (v.)" },
+            { en: "Classification", cn: "分類 (n.)" },
+            { en: "Currency", cn: "貨幣、流通" },
+            { en: "Elevator", cn: "電梯" },
+            { en: "A healthy approach", cn: "健康的方式" },
+            { en: "Occasion", cn: "場合" },
+            { en: "Portray", cn: "描繪" },
+            { en: "Ostracize", cn: "排斥" },
+            { en: "Imaginary", cn: "想像的" },
+            { en: "Associated", cn: "相關的" },
+            { en: "Dissociated", cn: "分離的" }
+        ];
+
+        let selectedCards = [];
+        let matchedCount = 0;
+        let movesCount = 0;
+        let isLocked = false;
+        const totalPairs = 8; // Number of pairs per round
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function initGame() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            selectedCards = [];
+            matchedCount = 0;
+            movesCount = 0;
+            isLocked = false;
+            updateStats();
+
+            // 1. Pick 8 random pairs from the full database
+            const shuffledVocab = shuffle([...vocabData]);
+            const selectedPairs = shuffledVocab.slice(0, totalPairs);
+
+            // 2. Create card objects (separating EN and CN)
+            let gameCards = [];
+            selectedPairs.forEach((pair, index) => {
+                gameCards.push({ id: index, text: pair.en, type: 'en' });
+                gameCards.push({ id: index, text: pair.cn, type: 'cn' });
+            });
+
+            // 3. Shuffle the cards on the grid
+            gameCards = shuffle(gameCards);
+
+            // 4. Render to DOM
+            gameCards.forEach(cardData => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.id = cardData.id;
+                card.innerText = cardData.text;
+                card.addEventListener('click', () => handleCardClick(card));
+                grid.appendChild(card);
+            });
+        }
+
+        function handleCardClick(card) {
+            // Prevent clicking if locked, already matched, or clicking the same card twice
+            if (isLocked || card.classList.contains('matched') || card.classList.contains('selected')) {
+                return;
+            }
+
+            card.classList.add('selected');
+            selectedCards.push(card);
+
+            if (selectedCards.length === 2) {
+                movesCount++;
+                updateStats();
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            isLocked = true;
+            const [card1, card2] = selectedCards;
+
+            // Compare dataset ID
+            if (card1.dataset.id === card2.dataset.id) {
+                // Match!
+                card1.classList.remove('selected');
+                card2.classList.remove('selected');
+                card1.classList.add('matched');
+                card2.classList.add('matched');
+                matchedCount++;
+                selectedCards = [];
+                isLocked = false;
+                updateStats();
+
+                if (matchedCount === totalPairs) {
+                    setTimeout(() => alert(`Great job! You finished in ${movesCount} moves.`), 300);
+                }
+            } else {
+                // No Match
+                card1.classList.add('mismatch');
+                card2.classList.add('mismatch');
+
+                setTimeout(() => {
+                    card1.classList.remove('selected', 'mismatch');
+                    card2.classList.remove('selected', 'mismatch');
+                    selectedCards = [];
+                    isLocked = false;
+                }, 1000);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('score').innerText = `Matches: ${matchedCount}/${totalPairs}`;
+            document.getElementById('moves').innerText = `Moves: ${movesCount}`;
+        }
+
+        // Start the game on load
+        initGame();
+
+    </script>
+</body>
+</html>
